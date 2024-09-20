@@ -1,0 +1,6 @@
+
+Locust/Data/*
+Locust/data/*
+app/__pycache__/*
+
+Locust/output/*

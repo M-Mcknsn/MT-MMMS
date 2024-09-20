@@ -1,0 +1,144 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: mmcknsn/mt-mmms:backend
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '20.0'  
+    #     reservations:
+    #       cpus: '8.0'  
+    volumes:
+      - ./app:/app
+      - prometheus_multiproc:/tmp/prometheus_multiproc  # Mount for Prometheus Multiprocessing
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/mydatabase
+      - MINIO_URL=minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - prometheus_multiproc_dir=/tmp/prometheus_multiproc  # env_var for Prometheus Multiprocessing
+    depends_on:
+      - mongo
+      - minio
+    ports:
+      - "5000:5000"
+    networks:
+      - mynetwork   
+    command: gunicorn -w 4 -b 0.0.0.0:5000 --timeout 1200 backend:app
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    image: mmcknsn/mt-mmms:frontend
+    expose:
+      - "7860"
+    depends_on:
+      - backend
+    ports:
+      - "7860:7860"
+    networks:
+      - mynetwork   
+      
+  nginx:
+    image: mmcknsn/mt-mmms:nginx
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - frontend
+      - prometheus
+      - grafana
+    networks:
+      - mynetwork   
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - mynetwork   
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+    networks:
+      - mynetwork   
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    networks:
+      - mynetwork   
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - mynetwork   
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - prometheus
+    command:
+      - --enable_load_reader=true
+    networks:
+      - mynetwork   
+      
+  nginx_exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    ports:
+      - "9113:9113"
+    command:
+      - "-nginx.scrape-uri=http://nginx/nginx_status"
+    depends_on:
+      - nginx
+    networks:
+      - mynetwork
+      
+volumes:
+  mongo-data:
+  minio-data:
+  grafana-data:
+  prometheus-data:
+  prometheus_multiproc:  
+
+networks:
+  mynetwork: 
+    driver: bridge

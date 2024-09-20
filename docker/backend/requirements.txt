@@ -1,0 +1,12 @@
+Flask==3.0.3
+gunicorn==23.0.0
+pymongo==4.3.3
+transformers==4.41.1
+pytesseract==0.3.10
+Pillow==10.3.0
+torch==2.3.0
+prometheus_client==0.20.0
+minio==7.2.8
+accelerate==0.33.0
+gradio==4.43.0
+requests==2.32.2
